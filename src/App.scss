@@ -1,0 +1,176 @@
+$textlight: #fff;
+$background-darker: #202225;
+$background-mid: #36393f;
+$background-light: #8e9297;
+$font-stack: Roboto, Arial, Helvetica, sans-serif;
+
+body, html, main, div#root, div.App {
+  margin: 0;
+  padding: 0;
+  border: none;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  font-family: $font-stack;
+}
+
+/* Multi-Use Classes */
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(200,200,200,0.5);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .sm-modal {
+    background-color: $background-darker;
+    color: $textlight;
+    padding: 10px 20px;
+    width: calc(100% - 100px);
+    max-width: 800px;
+    border-radius: 10px;
+
+    .col {
+      padding: 5px 10px;
+
+      div {
+        background-color: $background-mid;
+        border-radius: 10px;
+        padding: 10px;
+
+        .input-with-icon {
+          position: relative;
+          padding: 0;
+          margin: 0;
+          height: 30px;
+          background-color: $background-darker;
+
+          input {
+            box-sizing: border-box;
+            background-color: $background-darker;
+            color: $textlight;
+            border-radius: 10px;
+            height: 100%;
+            border: none;
+            padding: 0 0 0 35px;
+
+            &:active, &:focus {
+              outline: none;
+            }
+          }
+
+          .input-icon {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 30px;
+            height: 30px;
+            background-color: $background-darker;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-size: cover;
+          }
+        }
+      }
+    }
+  }
+}
+
+
+/* Channel List */
+#channel-bar {
+  background-color: $background-darker;
+  height: 100%;
+  width: 60px;
+  color: $textlight;
+  box-sizing: border-box;
+  overflow: auto;
+
+  div.hr {
+    height: 1px;
+    width: calc(100% - 10px);
+    background: $textlight;
+    margin: 4px 5px;
+    box-sizing: border-box;
+  }
+
+  div.channel-icon div.delete-channel {
+    display: none;
+  }
+
+  div.channel-icon.show-delete div.delete-channel {
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.2);
+    transition-duration: 0.25s;
+    transition-property: border-radius;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  div.channel-icon.show-delete {
+    animation: wiggle .25s infinite;
+  }
+  
+  div.channel-icon {
+    width: calc(100% - 10px);
+    height: 50px;
+    margin: 4px 5px;
+    box-sizing: border-box;
+    transition-duration: 0.25s;
+    transition-property: border-radius;
+    border-radius: 50%;
+    padding: 0;
+    background-color: $background-mid;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 36px;
+    user-select: none;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    overflow: hidden;
+
+    &:first-of-type {
+      margin-top: 4px;
+    }
+
+    &:hover, &:focus, &.current-channel {
+      transition-duration: 0.25s;
+      transition-property: border-radius;
+      border-radius: 25%;
+    }
+  }
+}
+
+
+/* Animations */
+@keyframes wiggle {
+   0% { transform: rotate(1deg); } 
+   25% { transform: rotate(-1deg); } 
+   50% { transform: rotate(1deg); } 
+   75% { transform: rotate(-1deg); }
+   100% { transform: rotate(0deg); } 
+}
+
+/* Tooltip Styling */
+.__react_component_tooltip {
+  font-weight: bold;
+  font-family: Arial, Helvetica, sans-serif;
+  color: $textlight;
+  font-size: 15px;
+}
+
+/* Most important classes */
+.hidden {
+  display: none;
+}

@@ -2,6 +2,7 @@ $textlight: #fff;
 $background-darker: #202225;
 $background-mid: #36393f;
 $background-light: #8e9297;
+$button-pop: #7289da;
 $font-stack: Roboto, Arial, Helvetica, sans-serif;
 
 body, html, main, div#root, div.App {
@@ -35,6 +36,26 @@ body, html, main, div#root, div.App {
     width: calc(100% - 100px);
     max-width: 800px;
     border-radius: 10px;
+    position: relative;
+
+    .close-button {
+      border: none;
+      background: none;
+      font-size: 24px;
+      padding: 0 10px 0 0;
+      color: $textlight;
+      position: absolute;
+      right: 0;
+      top: 0;
+
+      &:hover {
+        opacity: 0.5;
+      }
+
+      &:active, &:focus {
+        outline: none;
+      }
+    }
 
     .col {
       padding: 5px 10px;
@@ -58,7 +79,8 @@ body, html, main, div#root, div.App {
             border-radius: 10px;
             height: 100%;
             border: none;
-            padding: 0 0 0 35px;
+            padding: 0 40px;
+            width: calc(100%);
 
             &:active, &:focus {
               outline: none;
@@ -75,6 +97,22 @@ body, html, main, div#root, div.App {
             background-position: center;
             background-repeat: no-repeat;
             background-size: cover;
+          }
+
+          .input-action {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 30px;
+            height: 30px;
+            background-color: $button-pop;
+            border: none;
+            border-radius: 10px;
+            color: $textlight;
+
+            &:hover {
+              opacity: 0.7;
+            }
           }
         }
       }
@@ -119,7 +157,7 @@ body, html, main, div#root, div.App {
     animation: wiggle .25s infinite;
   }
   
-  div.channel-icon {
+  div.channel-icon, div.command-icon {
     width: calc(100% - 10px);
     height: 50px;
     margin: 4px 5px;

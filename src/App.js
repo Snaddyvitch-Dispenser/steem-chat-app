@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactTooltip from 'react-tooltip'
 import './App.scss';
+const firefox_logo = require('./firefox.svg');
 const store = require('store/dist/store.modern');
 
 // Entire App
@@ -121,7 +122,7 @@ class SteeMessages extends React.Component {
     return (
       <div className="App">
         <main>
-          <LoginPanel/>
+          <LoginPanel signedInAs="" />
           {this.renderAddChannelDialog()}
           {this.renderChannelList()}
           <Channel />
@@ -153,29 +154,36 @@ class Channel extends React.Component {
 
 class LoginPanel extends React.Component {
   getLoginFormContent() {
-    if (window.hive_keychain === null) {
+    if (window.hive_keychain !== null) {
 
     } else {
       return (
-        <div>
-          <p>Sorry, but to use this app, you need to install Hive Keychain</p>
-          <p>Get it for
-            <a href="https://addons.mozilla.org/en-US/firefox/addon/hive-keychain">Firefox</a>
-          </p>
+        <span className="login-info">
+          <h3>This app requires Hive Keychain</h3>
+          <h4>Install it on:</h4>
+          <div className="browsers">
+            <a href="https://addons.mozilla.org/en-US/firefox/addon/hive-keychain">
+              <img src={firefox_logo} alt="Firefox" />
+            </a>
+          </div>
           <img src="https://camo.githubusercontent.com/468645d9ab6ea045a344b22d963c592ebe5ee511/687474703a2f2f752e6375626575706c6f61642e636f6d2f617263616e67652f794f644935672e706e67" alt="" />
-        </div>
+        </span>
       );
     }
   }
 
   render () {
-    return (
-      <div className="login-panel">
-        <div className="login-form">
-          {this.getLoginFormContent()}
+    if (this.props.signedInAs === "") {
+      return (
+        <div className="overlay">
+          <div className="sm-modal">
+            {this.getLoginFormContent()}
+          </div>
         </div>
-      </div>
-    );
+      );
+    } else {
+      return "";
+    }
   }
 }
 

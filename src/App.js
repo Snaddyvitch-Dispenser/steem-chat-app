@@ -2,7 +2,12 @@ import React from 'react';
 import ReactTooltip from 'react-tooltip'
 import './App.scss';
 const firefox_logo = require('./firefox.svg');
+const chrome_logo = require('./chrome.svg');
 const store = require('store/dist/store.modern');
+const axios = require("axios");
+
+// Allow requests to api.dmessages.app to set cookies.
+axios.defaults.withCredentials = true;
 
 // Entire App
 class SteeMessages extends React.Component {
@@ -153,20 +158,56 @@ class Channel extends React.Component {
 }
 
 class LoginPanel extends React.Component {
-  getLoginFormContent() {
-    if (window.hive_keychain !== null) {
+  constructor(props) {
+    super(props);
 
+    // State - for holding values from inputs and other HTML elements
+    this.state = {'loginAs': ''};
+  }
+  
+  startLoginChallenge(){
+    // If user text not blank
+    if (this.state.loginAs !== "") {
+      // Get challenge
+      axios.get("https://api.dmessages.app/challenge.php", { params: { user: this.state.loginAs }}).then((response) => {
+        if (response.data.success) {
+          console.log(response.data);
+          window.hive_keychain.requestVerifyKey(response.data.user, response.data.challenge, "Memo", (data) => {
+	console.log(data);
+});
+        } else {
+          console.log(response.data.error_message);
+        }
+      });
+    } else {
+
+    }
+  }
+
+  getLoginFormContent() {
+    if (window.hive_keychain !== null || window.hive_keychain !== undefined) {
+      return (
+        <span className="login-info">
+          <h5>Enter your username to login</h5>
+          <input onChange={event => this.setState({loginAs: event.target.value.toLowerCase()})}  type="text" id="username" />
+          <button onClick={event => this.startLoginChallenge()}>Login!</button>
+        </span>
+      );
     } else {
       return (
         <span className="login-info">
           <h3>This app requires Hive Keychain</h3>
           <h4>Install it on:</h4>
           <div className="browsers">
-            <a href="https://addons.mozilla.org/en-US/firefox/addon/hive-keychain">
+            <a rel="nofollow" href="https://addons.mozilla.org/en-US/firefox/addon/hive-keychain">
               <img src={firefox_logo} alt="Firefox" />
             </a>
+            <a rel="nofollow" href="https://chrome.google.com/webstore/detail/hive-keychain/jcacnejopjdphbnjgfaaobbfafkihpep">
+              <img src={chrome_logo} alt="Chrome" />
+            </a>
           </div>
-          <img src="https://camo.githubusercontent.com/468645d9ab6ea045a344b22d963c592ebe5ee511/687474703a2f2f752e6375626575706c6f61642e636f6d2f617263616e67652f794f644935672e706e67" alt="" />
+          <p class="copyright-text">The Firefox logo is a trademark of the Mozilla Foundation in the U.S. and other countries. Google Chrome is a trademark of Google LLC</p>
+          <p></p>
         </span>
       );
     }

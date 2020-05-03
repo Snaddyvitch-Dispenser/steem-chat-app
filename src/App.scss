@@ -172,25 +172,51 @@ body, html, main, div#root, div.App {
   .channel-send {
     position: absolute;
     bottom: 0;
+    right: 0;
     width: 100%;
     padding: 5px;
-    background-color: $background-mid + 10; // Lighten Mid slightly
+    margin: 0 !important;
+    background-color: lighten($background-mid, 10); // Lighten Mid slightly
+
+    .channel-buttons {
+      display: flex;
+      align-items: center;
+    }
 
     .message-text {
-      width: 90%;
-      background-color: $background-mid + 30;
+      background-color: lighten($background-mid,30);
       border: none;
       border-radius: 10px;
       padding: 5px 10px;
       color: $textlight;
     }
 
-    .message-send-button {
+    .message-button {
       background: none;
       border: none;
       color: $textlight;
-      width: 10%;
       text-align: center;
+      margin-right: 5px;
+      width: 40px;
+      height: 40px;
+    }
+
+    .message-button:last-of-type {
+      margin-right: 0;
+    }
+
+    .message-user-button {
+      background-repeat: no-repeat;
+      background-size: cover;
+      background-position: center center;
+    }
+
+    .message-send-button, .message-add-button {
+      background: $background-darker;
+    }
+
+    .message-add-button {
+      font-weight: 900;
     }
   }
 }

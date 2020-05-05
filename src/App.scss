@@ -169,6 +169,10 @@ body, html, main, div#root, div.App {
     }
   }
 
+  .channel-content {
+    height: calc(100% - 94px);
+  }
+
   .channel-send {
     position: absolute;
     bottom: 0;
@@ -331,6 +335,38 @@ body, html, main, div#root, div.App {
     .message-info, .message-avatar {
       display: none;
     }
+  }
+
+  &:last-of-type {
+    padding-bottom: 10px;
+  }
+}
+
+button.scroll-to-bottom {
+  width: 40px;
+  height: 40px;
+  color: white;
+  background-color: rgba(0,0,0,0.5);
+  font-size: 20px;
+}
+
+.scrollable-messages {
+  // Firefox only
+  scrollbar-color: $background-light $background-darker;
+  scrollbar-width: thin;
+
+  // Chrome/WebKit only
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  &::-webkit-scrollbar-track-piece  {
+    background-color: $background-darker;
+  }
+
+  &::-webkit-scrollbar-thumb:vertical {
+    height: 30px;
+    background-color: $background-light;
   }
 }
 

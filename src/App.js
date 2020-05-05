@@ -6,6 +6,7 @@ import firefox_logo from './firefox.svg'
 import chrome_logo from './chrome.svg'
 import 'react-toastify/dist/ReactToastify.css';
 import Websocket from 'react-websocket';
+import ScrollToBottom from 'react-scroll-to-bottom';
 import Since from 'react-since'
 import store from 'store/dist/store.modern';
 import axios from "axios";
@@ -117,7 +118,7 @@ class SteeMessages extends React.Component {
                   <p>Start a chat in a public group.</p>
                   <div className="input-with-icon">
                     <div className="input-icon" id="person-avatar-dm" style={{backgroundImage: `url( "https://steemitimages.com/u/dmessages/avatar")`}} alt="null"></div>
-                    <input type="text" id="private_message_username" value={this.state.channelAddName} onChange={event => this.setState({channelAddName: event.target.value.toLowerCase()})} maxLength="16" />
+                    <input type="text" id="group_message_username" value={this.state.channelAddName} onChange={event => this.setState({channelAddName: event.target.value.toLowerCase()})} maxLength="16" />
                     <button className="input-action" onClick={event => {if(this.state.channelAddName !== "") {this.addChannel(this.state.channelAddName,false,"dmessages"); this.setState({showAddChannels: false, channelAddName: ""})}}}>+</button>
                   </div>
                 </div>
@@ -152,7 +153,11 @@ class SteeMessages extends React.Component {
   }
 
   renderChannel() {
-    return (<Channel userSignedIn={this.state.currentUser} websocketOpen={this.state.wsIsOpen} websocketSend={(message) => this.websocketSendMessage(message)} currentChannel={this.state.currentChannel} messageHistory={this.state.history} />);
+    return (<Channel userSignedIn={this.state.currentUser} websocketOpen={this.state.wsIsOpen} websocketSend={(message) => this.websocketSendMessage(message)} currentChannel={this.state.currentChannel} messageHistory={this.state.history} signOut={() => this.signUserOut()} />);
+  }
+
+  signUserOut() {
+    this.setState({"currentUser": ""})
   }
 
   websocketRecieveMessage(data) {
@@ -198,13 +203,13 @@ class SteeMessages extends React.Component {
             var adding_msg = message_data.data;
 
             if (adding_msg.type === "channel") {
-              if (!(current_msg.to in history)) {
+              if (!(adding_msg.to in history_now.group)) {
                 history_now["group"][adding_msg.to] = [];
               }
 
               history_now["group"][adding_msg.to].push(adding_msg);
             } else if (adding_msg.type === "private") {
-              if (!(adding_msg.to in history)) {
+              if (!(adding_msg.to in history_now.private)) {
                 history_now["private"][adding_msg.to] = [];
               }
 
@@ -212,7 +217,7 @@ class SteeMessages extends React.Component {
             }
             console.log(history);
             // Save history to state - updating all channels
-            this.setState({'history': history});
+            this.setState({'history': history_now});
           } 
         // Response to sending messages
       } else if ('success' in message_data) {
@@ -322,7 +327,7 @@ class Channel extends React.Component {
   constructor(props){
     super(props);
 
-    this.state = {'message': ''}
+    this.state = {'message': '', "isSending": false}
   }
 
   messageGetter() {
@@ -336,7 +341,43 @@ class Channel extends React.Component {
   }
 
   sendMessage() {
-    
+    this.setState({"isSending": true});
+    if (this.state.message.length > 0) {
+      var transaction_data = JSON.stringify({
+        "format": "plaintext",
+        "extensions": [],
+        "app": "dmessages/v0.0.1",
+        "to": this.props.currentChannel.name,
+        "content": this.state.message,
+        "expires": Math.floor((new Date()).getTime()/1000) + 20
+      });
+
+      try {
+        window.hive_keychain.requestSignBuffer(this.props.userSignedIn,transaction_data,"Posting",(keychain_response) => {
+          if (keychain_response.success) {
+            var transaction_with_info={
+              "name": this.props.userSignedIn,
+              "signature": keychain_response.result,
+              "type": "send_" + (this.props.currentChannel.isPrivateMessage ? "private" : "channel") + "_message",
+              "data": transaction_data
+            }
+
+            if (this.props.websocketOpen) {
+              this.props.websocketSend(JSON.stringify(transaction_with_info));
+              this.setState({'message': '', 'isSending': false});
+            } else {
+              this.setState({"isSending": false});
+            }
+          } else {
+            toast.error(keychain_response.message + ". Please try again.");
+            this.setState({"isSending": false});
+          }
+        });
+      } catch {
+        toast.error("Can't communicate with Keychain. Please try again.");
+        this.setState({"isSending": false});
+      }
+    }
   }
 
   render() {
@@ -346,14 +387,15 @@ class Channel extends React.Component {
         <div className="channel-info">
           <p><em className={"fas fa-" + (this.props.currentChannel.isPrivateMessage ? "at" : "hashtag")}></em> {this.props.currentChannel.name}</p>
         </div>
-        <div className="channel-content">
+        <ScrollToBottom className="channel-content" scrollViewClassName="scrollable-messages" followButtonClassName="scroll-to-bottom fas fa-arrow-down">
           {current_messages.map((item, index) => (<Message data={item} previous_author={((index > 0) ? current_messages[index - 1].from : "")}/>))}
-        </div>
+        </ScrollToBottom>
         <div className="channel-send row">
-          <input type="text" disabled={!this.props.websocketOpen} className="message-text col-sm-11" value={this.state.message} onChange={event => this.setState({message: event.target.value.toString()})} />
+          <input type="text" onKeyUp={event => {if (event.key === "Enter" || event.key === "NumpadEnter") { this.sendMessage() }}} disabled={!(this.props.websocketOpen || !this.state.isSending)} className="message-text col-sm-11" value={this.state.message} onChange={event => this.setState({message: event.target.value.toString()})} />
           <div className="channel-buttons col-sm-1">
-            <button disabled={!this.props.websocketOpen} onClick={() => this.props.websocketSend(this.state.message)} className="message-button message-send-button btn"><em className="far fa-paper-plane"></em></button>
+            <button disabled={!(this.props.websocketOpen || !this.state.isSending)} onClick={() => this.sendMessage()} className="message-button message-send-button btn"><em className="far fa-paper-plane"></em></button>
             <button className="message-button message-user-button btn" style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.userSignedIn}/avatar")`}}></button>
+            <button className="message-button message-add-button btn" onClick={() => this.props.signOut()}><em className="fas fa-sign-out-alt"></em></button>
           </div>
         </div>
       </div>

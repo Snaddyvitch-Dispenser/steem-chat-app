@@ -11,6 +11,7 @@
     "react": "^16.12.0",
     "react-dom": "^16.12.0",
     "react-scripts": "3.2.0",
+    "react-since": "^1.3.1",
     "react-toastify": "^5.5.0",
     "react-tooltip": "^4.1.2",
     "react-websocket": "^2.1.0",

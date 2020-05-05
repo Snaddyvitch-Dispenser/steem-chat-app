@@ -6,8 +6,9 @@ import firefox_logo from './firefox.svg'
 import chrome_logo from './chrome.svg'
 import 'react-toastify/dist/ReactToastify.css';
 import Websocket from 'react-websocket';
-const store = require('store/dist/store.modern');
-const axios = require("axios");
+import Since from 'react-since'
+import store from 'store/dist/store.modern';
+import axios from "axios";
 
 // Allow requests to api.dmessages.app to set cookies.
 axios.defaults.withCredentials = true;
@@ -18,7 +19,7 @@ class SteeMessages extends React.Component {
     super(props);
 
     // State - for holding values from inputs and other HTML elements
-    this.state = {'pmAddUsername': '', 'showAddChannels': false, 'channelAddName': '', 'showRemoveChannels': false, 'channelList': {"group": [], "private": []}, 'currentUser': '', "currentChannel": {"name": "", "isPrivateMessage": true}};
+    this.state = {'pmAddUsername': '', 'showAddChannels': false, 'channelAddName': '', 'showRemoveChannels': false, 'channelList': {"group": [], "private": []}, 'currentUser': '', "currentChannel": {"name": "", "isPrivateMessage": true}, "wsConnectionAttempts": 0, "wsIsOpen": false, 'history': {"group":{},"private":{}}};
 
     // Check if channels are stored in browser
     if (store.get('channels')) {
@@ -151,12 +152,134 @@ class SteeMessages extends React.Component {
   }
 
   renderChannel() {
-    return (<Channel userSignedIn={this.state.currentUser} currentChannel={this.state.currentChannel} />);
+    return (<Channel userSignedIn={this.state.currentUser} websocketOpen={this.state.wsIsOpen} websocketSend={(message) => this.websocketSendMessage(message)} currentChannel={this.state.currentChannel} messageHistory={this.state.history} />);
   }
 
   websocketRecieveMessage(data) {
+    var message_data = false;
+    try {
+      message_data = JSON.parse(data);
+    } catch {
+      // In the unlikely event of packet drops .etc. ignore it
+    }
 
+    if (message_data !== false) {
+      console.log(message_data);
+      // commanded message
+      if ('command' in message_data) {
+        // Contains history from before we were logged in...
+        if (message_data.command === "history") {
+          // Create a clear History
+          var history = {"group":{},"private":{}};
+          // Fill History with new history
+          for (var i = 0; i < message_data.data.length; i++) {
+            // Store as a variable for easier access
+            var current_msg = message_data.data[i];
+
+            if (current_msg.type === "channel") {
+              if (!(current_msg.to in history.group)) {
+                history["group"][current_msg.to] = [];
+              }
+
+              history["group"][current_msg.to].push(current_msg);
+            } else if (current_msg.type === "private") {
+              if (!(current_msg.to in history.private)) {
+                history["private"][current_msg.to] = [];
+              }
+
+              history["private"][current_msg.to].push(current_msg);
+            }
+          } 
+          console.log(history);
+          // Save history to state - updating all channels
+          this.setState({'history': history});
+        } else if (message_data.command === "message") {
+            var history_now = this.state.history;
+            var adding_msg = message_data.data;
+
+            if (adding_msg.type === "channel") {
+              if (!(current_msg.to in history)) {
+                history_now["group"][adding_msg.to] = [];
+              }
+
+              history_now["group"][adding_msg.to].push(adding_msg);
+            } else if (adding_msg.type === "private") {
+              if (!(adding_msg.to in history)) {
+                history_now["private"][adding_msg.to] = [];
+              }
+
+              history_now["private"][adding_msg.to].push(adding_msg);
+            }
+            console.log(history);
+            // Save history to state - updating all channels
+            this.setState({'history': history});
+          } 
+        // Response to sending messages
+      } else if ('success' in message_data) {
+        // If it's successful - show success message
+        if (message_data.success) {
+          toast.success("Message sent successfully.");
+        } else {
+          if (message_data.message === "Message expired, you probably took too long to approve this message in Keychain! Please try again.") {
+            toast.error("You took too long to sign that last message. Please sign a new one.");
+            this.onWebsocketConnect();
+          } else {
+            // Otherwise spit out the error.
+            toast.error("Error: " + message_data.message);
+          }
+        }
+      }
+    }
   }
+
+  websocketSendMessage(msg) {
+    this.chatWebSocket.sendMessage(msg);
+  }
+
+  onWebsocketConnect() {
+    if (this.state.currentUser !== "") {
+    var signed_challenge = JSON.stringify({
+      "expires": Math.floor((new Date()).getTime() / 1000) + 120,
+      "message": "Please sign me into dMessages",
+    });
+    try {
+      window.hive_keychain.requestSignBuffer(this.state.currentUser,signed_challenge,"Posting",(keychain_response) => {
+        if (keychain_response.success) {
+          var challenge_login = JSON.stringify({
+            "name": this.state.currentUser,
+            "signature": keychain_response.result,
+            "type": "login",
+            "data": signed_challenge
+          });
+
+          this.chatWebSocket.sendMessage(challenge_login);
+        } else {
+          toast.error(keychain_response.message + ". Retrying in 5 seconds.");
+          setTimeout(() => {
+            this.onWebsocketConnect();
+          }, 5000);
+        }
+      });
+    } catch {
+      this.setState({"wsConnectionAttempts": this.state.wsConnectionAttempts + 1});
+      if (this.state.wsConnectionAttempts > 1) {
+        toast.error("Keychain doesn't appear to be available. Retrying in 5 seconds.");
+        setTimeout(() => {
+            this.onWebsocketConnect();
+        }, 5000);
+      } else {
+        setTimeout(() => {
+            this.onWebsocketConnect();
+        }, 1000);
+      }
+    }
+  } else {
+    // If we're not signed in, wait until we are and then log in
+    setTimeout(() => {
+      this.onWebsocketConnect();
+    }, 3000);
+  }
+}
 
   // Render the entire app
   render() {
@@ -164,7 +287,7 @@ class SteeMessages extends React.Component {
       <div className="App">
         <ToastContainer />
         <main>
-          <Websocket url="ws://localhost" onMessage={this.websocketRecieveMessage.bind(this)} onClose={() => toast.error("Disconnected, retrying.")} onOpen={() => toast.success("Connected!")} />
+          <Websocket ref={Websocket => {this.chatWebSocket = Websocket;}} url="ws://localhost" onMessage={this.websocketRecieveMessage.bind(this)} onClose={() => {toast.error("Disconnected, retrying."); this.setState({"wsIsOpen": false});}} onOpen={() => {toast.success("Connected!"); this.setState({"wsIsOpen": true}); this.onWebsocketConnect();}} />
           {this.renderLoginPanel()}
           {this.renderAddChannelDialog()}
           {this.renderChannelList()}
@@ -176,21 +299,60 @@ class SteeMessages extends React.Component {
   }
 }
 
+class Message extends React.Component {
+    componentDidUpdate() {
+      ReactTooltip.rebuild();
+    }
+
+  render () {
+    var sent_at = (new Date(this.props.data.timestamp * 1000));
+    var sent_at_formatted = sent_at.toLocaleDateString() + " " + sent_at.toLocaleTimeString();
+
+    return (
+      <div className={"message" + ((this.props.previous_author === this.props.data.from) ? " sameauthor": "")}>
+        <div className="message-avatar" style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.data.from}/avatar")`}}></div>
+        <div className="message-info">{this.props.data.from} - <span data-tip={sent_at_formatted} data-place="top"><Since date={sent_at}/></span></div>
+        <div className="message-text">{this.props.data.content}</div>
+      </div>
+    );
+  }
+}
+
 class Channel extends React.Component {
+  constructor(props){
+    super(props);
+
+    this.state = {'message': ''}
+  }
+
+  messageGetter() {
+    var look_in = (this.props.currentChannel.isPrivateMessage ? "private" : "group");
+    if (this.props.currentChannel.name in this.props.messageHistory[look_in]) {
+      console.log(this.props.messageHistory[look_in][this.props.currentChannel.name]);
+      return this.props.messageHistory[look_in][this.props.currentChannel.name];
+    } else {
+      return [];
+    }
+  }
+
+  sendMessage() {
+    
+  }
+
   render() {
+    var current_messages = this.messageGetter()
     return (
       <div className="channel">
         <div className="channel-info">
           <p><em className={"fas fa-" + (this.props.currentChannel.isPrivateMessage ? "at" : "hashtag")}></em> {this.props.currentChannel.name}</p>
         </div>
         <div className="channel-content">
-
+          {current_messages.map((item, index) => (<Message data={item} previous_author={((index > 0) ? current_messages[index - 1].from : "")}/>))}
         </div>
         <div className="channel-send row">
-          <input type="text" className="message-text col-sm-11" />
+          <input type="text" disabled={!this.props.websocketOpen} className="message-text col-sm-11" value={this.state.message} onChange={event => this.setState({message: event.target.value.toString()})} />
           <div className="channel-buttons col-sm-1">
-            <button className="message-button message-send-button btn"><em className="far fa-paper-plane"></em></button>
-            <button className="message-button message-add-button btn">+</button>
+            <button disabled={!this.props.websocketOpen} onClick={() => this.props.websocketSend(this.state.message)} className="message-button message-send-button btn"><em className="far fa-paper-plane"></em></button>
             <button className="message-button message-user-button btn" style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.userSignedIn}/avatar")`}}></button>
           </div>
         </div>
@@ -245,6 +407,8 @@ class LoginPanel extends React.Component {
           } else {
             toast.success("You're signed in!");
             this.props.onSignIn(response.data.user);
+
+           // WebSocketSignIn(this.props.signedInAs,this.props.websocket);
           }
         }
       });
@@ -304,6 +468,10 @@ class LoginPanel extends React.Component {
         </div>
       );
     } else {
+      // Get chat history
+      //setTimeout(() => {
+        //WebSocketSignIn(this.props.signedInAs,this.props.websocket);
+      //},500);
       return "";
     }
   }

@@ -8750,6 +8750,11 @@ react-scripts@3.2.0:
   optionalDependencies:
     fsevents "2.0.7"
 
+react-since@^1.3.1:
+  version "1.3.1"
+  resolved "https://registry.yarnpkg.com/react-since/-/react-since-1.3.1.tgz#c58843d7f9139bec9d764c251cf1534062c81e92"
+  integrity sha512-Lv4Raxv4N3pCyUxlEJIe1MaMLIU6lO/RDzcgFhiP0YzbfazCSAmIzn5BK0NnAPCGLV4ZM+uqQlltb/G4UZp2Xw==
+
 react-toastify@^5.5.0:
   version "5.5.0"
   resolved "https://registry.yarnpkg.com/react-toastify/-/react-toastify-5.5.0.tgz#f55de44f6b5e3ce3b13b69e5bb4427f2c9404822"

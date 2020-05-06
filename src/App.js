@@ -1,15 +1,17 @@
 import React from 'react';
-import ReactTooltip from 'react-tooltip'
+import ReactTooltip from 'react-tooltip';
 import './App.scss';
-import { ToastContainer, toast } from 'react-toastify'
-import firefox_logo from './firefox.svg'
-import chrome_logo from './chrome.svg'
+import { ToastContainer, toast } from 'react-toastify';
+import { Client, Signature, cryptoUtils } from 'dsteem';
+import firefox_logo from './firefox.svg';
+import chrome_logo from './chrome.svg';
 import 'react-toastify/dist/ReactToastify.css';
 import Websocket from 'react-websocket';
 import ScrollToBottom from 'react-scroll-to-bottom';
-import Since from 'react-since'
+import Since from 'react-since';
 import store from 'store/dist/store.modern';
 import axios from "axios";
+import crypto from 'crypto';
 
 // Allow requests to api.dmessages.app to set cookies.
 axios.defaults.withCredentials = true;
@@ -28,6 +30,13 @@ class SteeMessages extends React.Component {
       this.state.channelList = store.get('channels');
     }
 
+    if (store.get('authorisedCache')) {
+      // Load pre-approved messages and user keys from browser
+      this.authorisedCache = store.get('channels');
+    } else {
+      this.authorisedCache = {"messages": [], "keys": {}};
+    }
+
     // Load user from storage if saved
     if (store.get('user')) {
       if (store.get('user') !== "") {
@@ -38,6 +47,8 @@ class SteeMessages extends React.Component {
     if (store.get('currentChannel')) {
       this.state.currentChannel = store.get('currentChannel');
     }
+
+    this.hiveClient = new Client('https://anyx.io');
   }
 
   // Toggle add channels box
@@ -89,12 +100,10 @@ class SteeMessages extends React.Component {
     }
     // Update browser copy & state
     this.setState({channelList: channels});
-    store.set('channels', this.state.channelList);
+    store.set('channels', channels);
   }
 
   onChannelClick(channel, isPrivateMessage=true){
-    // Make sure it gets set
-    this.state.currentChannel = {"name": channel, "isPrivateMessage": isPrivateMessage};
     this.setState({currentChannel: {"name": channel, "isPrivateMessage": isPrivateMessage}});
     console.log(this.state.currentChannel, channel, isPrivateMessage);
     store.set('currentChannel', {"name": channel, "isPrivateMessage": isPrivateMessage});
@@ -163,7 +172,7 @@ class SteeMessages extends React.Component {
     this.setState({"currentUser": ""})
   }
 
-  websocketRecieveMessage(data) {
+  async websocketRecieveMessage(data) {
     var message_data = false;
     try {
       message_data = JSON.parse(data);
@@ -183,6 +192,47 @@ class SteeMessages extends React.Component {
           for (var i = 0; i < message_data.data.length; i++) {
             // Store as a variable for easier access
             var current_msg = message_data.data[i];
+            // this.authorisedCache =  {"messages": [], "keys": {}}
+
+            var this_message_hash = crypto.createHash('sha256').update(JSON.stringify(current_msg)).digest('hex');
+
+            if (this.authorisedCache.messages.includes(this_message_hash)) {
+              current_msg.checked = "signed"
+            } else {
+              var msg_successful_match = false;
+              if(current_msg.from in this.authorisedCache.keys) {
+                try {
+                  if (this.authorisedCache.keys[current_msg.from] === (Signature.fromString(current_msg.signature).recover(cryptoUtils.sha256(current_msg.signed_data))).toString()) {
+                    msg_successful_match = true;
+                    this.authorisedCache.messages.push(this_message_hash);
+                  }
+                } catch {
+                    console.log("Cached user key outdated or invalid message");
+                }
+              }
+
+              // Least cached method - VERY SLOW
+              if (!msg_successful_match) {
+                try {
+                        const [account] = await this.hiveClient.database.getAccounts([current_msg.from]);
+
+                        var pubPostingKey = account.posting.key_auths[0][0];
+
+                        var recoveredPubKey = Signature.fromString(current_msg.signature).recover(cryptoUtils.sha256(current_msg.signed_data));
+
+                        if (pubPostingKey === recoveredPubKey.toString()) {
+                          this.authorisedCache.keys[current_msg.from] = pubPostingKey;
+                          this.authorisedCache.messages.push(this_message_hash);
+                          current_msg.checked = "signed";
+                        }
+                } catch {
+                        current_msg.checked = "fake";
+                        console.log("Bad Signature!");
+                }
+              } else if (msg_successful_match) {
+                current_msg.checked = "signed";
+              }
+            }
 
             if (current_msg.type === "channel") {
               if (!(current_msg.to in history.group)) {
@@ -205,6 +255,46 @@ class SteeMessages extends React.Component {
         } else if (message_data.command === "message") {
             var history_now = this.state.history;
             var adding_msg = message_data.data;
+
+            var adding_message_hash = crypto.createHash('sha256').update(JSON.stringify(adding_msg)).digest('hex');
+
+            if (this.authorisedCache.messages.includes(adding_message_hash)) {
+              adding_msg.checked = "signed"
+            } else {
+              var successful_match = false;
+              if(adding_msg.from in this.authorisedCache.keys) {
+                try {
+                  if (this.authorisedCache.keys[adding_msg.from] === (Signature.fromString(adding_msg.signature).recover(cryptoUtils.sha256(adding_msg.signed_data))).toString()) {
+                    successful_match = true;
+                    this.authorisedCache.messages.push(adding_message_hash);
+                  }
+                } catch {
+                    console.log("Cached user key outdated or invalid message");
+                }
+              }
+
+              // Least cached method - VERY SLOW
+              if (!successful_match) {
+                try {
+                        const [account] = await this.hiveClient.database.getAccounts([adding_msg.from]);
+
+                        var msgPubPostingKey = account.posting.key_auths[0][0];
+
+                        var msgRecoveredPubKey = Signature.fromString(adding_msg.signature).recover(cryptoUtils.sha256(adding_msg.signed_data));
+
+                        if (msgPubPostingKey === msgRecoveredPubKey.toString()) {
+                          this.authorisedCache.keys[adding_msg.from] = msgPubPostingKey;
+                          this.authorisedCache.messages.push(adding_message_hash);
+                          adding_msg.checked = "signed";
+                        }
+                } catch {
+                        adding_msg.checked = "fake";
+                        console.log("Bad Signature!");
+                }
+              } else if (successful_match) {
+                adding_msg.checked = "signed";
+              }
+            }
 
             if (adding_msg.type === "channel") {
               if (!(adding_msg.to in history_now.group)) {
@@ -317,11 +407,19 @@ class Message extends React.Component {
   render () {
     var sent_at = (new Date(this.props.data.timestamp * 1000));
     var sent_at_formatted = sent_at.toLocaleDateString() + " " + sent_at.toLocaleTimeString();
+    var verification_symbol = "fas fa-times";
+    var verification_description = "This message has no valid proofs attached.";
+    if ('checked' in this.props.data) {
+      if (this.props.data.checked === "signed") {
+        verification_symbol="fas fa-check";
+        verification_description = "This message was signed with a valid signature."
+      }
+    }
 
     return (
       <div className={"message" + ((this.props.previous_author === this.props.data.from) ? " sameauthor": "")}>
         <div className="message-avatar" style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.data.from}/avatar")`}}></div>
-        <div className="message-info">{this.props.data.from} - <span data-tip={sent_at_formatted} data-place="top"><Since date={sent_at}/></span></div>
+        <div className="message-info">{this.props.data.from} - <span data-tip={sent_at_formatted} data-place="top"><Since date={sent_at}/></span> <span data-tip={verification_description} data-place="top"><em className={verification_symbol}></em></span></div>
         <div className="message-text">{this.props.data.content}</div>
       </div>
     );

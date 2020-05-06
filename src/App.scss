@@ -314,6 +314,7 @@ body, html, main, div#root, div.App {
   .message-info, .message-text {
     width: calc(100% - 40px);
     display: inline-block;
+    word-wrap: break-word;
   }
 
   .message-info {

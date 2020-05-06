@@ -20,7 +20,7 @@ class SteeMessages extends React.Component {
     super(props);
 
     // State - for holding values from inputs and other HTML elements
-    this.state = {'pmAddUsername': '', 'showAddChannels': false, 'channelAddName': '', 'showRemoveChannels': false, 'channelList': {"group": [], "private": []}, 'currentUser': '', "currentChannel": {"name": "", "isPrivateMessage": true}, "wsConnectionAttempts": 0, "wsIsOpen": false, 'history': {"group":{},"private":{}}};
+    this.state = {'pmAddUsername': '', 'showAddChannels': false, 'channelAddName': '', 'showRemoveChannels': false, 'channelList': {"group":[{"name":"general","avatar":"dmessages"}],"private":[]}, 'currentUser': '', "currentChannel": {"name": "general", "isPrivateMessage": false}, "wsConnectionAttempts": 0, "wsIsOpen": false, 'history': {"group":{},"private":{}}};
 
     // Check if channels are stored in browser
     if (store.get('channels')) {
@@ -93,8 +93,11 @@ class SteeMessages extends React.Component {
   }
 
   onChannelClick(channel, isPrivateMessage=true){
+    // Make sure it gets set
+    this.state.currentChannel = {"name": channel, "isPrivateMessage": isPrivateMessage};
     this.setState({currentChannel: {"name": channel, "isPrivateMessage": isPrivateMessage}});
-    store.set('currentChannel', this.state.currentChannel);
+    console.log(this.state.currentChannel, channel, isPrivateMessage);
+    store.set('currentChannel', {"name": channel, "isPrivateMessage": isPrivateMessage});
   }
 
   // Pass required functions down to ChannelList, and return the result for use in the app
@@ -149,7 +152,7 @@ class SteeMessages extends React.Component {
   }
 
   renderLoginPanel() {
-    return (<LoginPanel signedInAs={this.state.currentUser} onSignIn={(user) => {this.userSignedIn(user)}} />);
+    return (<LoginPanel websocketGetHistory={() => this.onWebsocketConnect()} signedInAs={this.state.currentUser} onSignIn={(user) => {this.userSignedIn(user)}} />);
   }
 
   renderChannel() {
@@ -188,11 +191,12 @@ class SteeMessages extends React.Component {
 
               history["group"][current_msg.to].push(current_msg);
             } else if (current_msg.type === "private") {
-              if (!(current_msg.to in history.private)) {
-                history["private"][current_msg.to] = [];
+              var dm_name = ((current_msg.to === this.state.currentUser) ? current_msg.from : current_msg.to)
+              if (!(dm_name in history.private)) {
+                history["private"][dm_name] = [];
               }
 
-              history["private"][current_msg.to].push(current_msg);
+              history["private"][dm_name].push(current_msg);
             }
           } 
           console.log(history);
@@ -209,16 +213,17 @@ class SteeMessages extends React.Component {
 
               history_now["group"][adding_msg.to].push(adding_msg);
             } else if (adding_msg.type === "private") {
-              if (!(adding_msg.to in history_now.private)) {
-                history_now["private"][adding_msg.to] = [];
+              var pm_name = ((adding_msg.to === this.state.currentUser) ? adding_msg.from : adding_msg.to);
+              if (!(pm_name in history_now.private)) {
+                history_now["private"][pm_name] = [];
               }
 
-              history_now["private"][adding_msg.to].push(adding_msg);
+              history_now["private"][pm_name].push(adding_msg);
             }
-            console.log(history);
+            console.log(history_now);
             // Save history to state - updating all channels
             this.setState({'history': history_now});
-          } 
+        } 
         // Response to sending messages
       } else if ('success' in message_data) {
         // If it's successful - show success message
@@ -292,7 +297,7 @@ class SteeMessages extends React.Component {
       <div className="App">
         <ToastContainer />
         <main>
-          <Websocket ref={Websocket => {this.chatWebSocket = Websocket;}} url="ws://localhost" onMessage={this.websocketRecieveMessage.bind(this)} onClose={() => {toast.error("Disconnected, retrying."); this.setState({"wsIsOpen": false});}} onOpen={() => {toast.success("Connected!"); this.setState({"wsIsOpen": true}); this.onWebsocketConnect();}} />
+          <Websocket ref={Websocket => {this.chatWebSocket = Websocket;}} url="wss://chat.websocket.ws:443" onMessage={this.websocketRecieveMessage.bind(this)} onClose={() => {toast.error("Disconnected, retrying."); this.setState({"wsIsOpen": false});}} onOpen={() => {toast.success("Connected!"); this.setState({"wsIsOpen": true}); this.onWebsocketConnect();}} />
           {this.renderLoginPanel()}
           {this.renderAddChannelDialog()}
           {this.renderChannelList()}
@@ -355,10 +360,11 @@ class Channel extends React.Component {
       try {
         window.hive_keychain.requestSignBuffer(this.props.userSignedIn,transaction_data,"Posting",(keychain_response) => {
           if (keychain_response.success) {
+            var msg_location = (this.props.currentChannel.isPrivateMessage ? "private" : "channel");
             var transaction_with_info={
               "name": this.props.userSignedIn,
               "signature": keychain_response.result,
-              "type": "send_" + (this.props.currentChannel.isPrivateMessage ? "private" : "channel") + "_message",
+              "type": "send_" + msg_location + "_message",
               "data": transaction_data
             }
 
@@ -391,9 +397,9 @@ class Channel extends React.Component {
           {current_messages.map((item, index) => (<Message data={item} previous_author={((index > 0) ? current_messages[index - 1].from : "")}/>))}
         </ScrollToBottom>
         <div className="channel-send row">
-          <input type="text" onKeyUp={event => {if (event.key === "Enter" || event.key === "NumpadEnter") { this.sendMessage() }}} disabled={!(this.props.websocketOpen || !this.state.isSending)} className="message-text col-sm-11" value={this.state.message} onChange={event => this.setState({message: event.target.value.toString()})} />
+          <input type="text" onKeyUp={event => {if (event.key === "Enter" || event.key === "NumpadEnter") { this.sendMessage() }}} disabled={!this.props.websocketOpen || this.state.isSending} className="message-text col-sm-11" value={this.state.message} onChange={event => this.setState({message: event.target.value.toString()})} />
           <div className="channel-buttons col-sm-1">
-            <button disabled={!(this.props.websocketOpen || !this.state.isSending)} onClick={() => this.sendMessage()} className="message-button message-send-button btn"><em className="far fa-paper-plane"></em></button>
+            <button disabled={!this.props.websocketOpen || this.state.isSending} onClick={() => this.sendMessage()} className="message-button message-send-button btn"><em className="far fa-paper-plane"></em></button>
             <button className="message-button message-user-button btn" style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.userSignedIn}/avatar")`}}></button>
             <button className="message-button message-add-button btn" onClick={() => this.props.signOut()}><em className="fas fa-sign-out-alt"></em></button>
           </div>
@@ -436,6 +442,7 @@ class LoginPanel extends React.Component {
                   } else {
                     toast.success("You're signed in!")
                     this.props.onSignIn(response.data.user);
+                    this.props.websocketGetHistory();
                   }
                 }
               });
@@ -450,7 +457,7 @@ class LoginPanel extends React.Component {
             toast.success("You're signed in!");
             this.props.onSignIn(response.data.user);
 
-           // WebSocketSignIn(this.props.signedInAs,this.props.websocket);
+            this.props.websocketGetHistory();
           }
         }
       });

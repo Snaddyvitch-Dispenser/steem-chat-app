@@ -166,6 +166,7 @@ body, html, main, div#root, div.App {
       padding: 0;
       margin: 0;
       font-weight: 900;
+      pointer-events: none;
     }
   }
 
@@ -338,15 +339,11 @@ body, html, main, div#root, div.App {
     color: mix($background-light, limegreen);
   }
 
-  &.sameauthor {
+  &.same-author {
     padding-top: 0;
     padding-bottom: 0;
     .message-info, .message-avatar {
       display: none;
-    }
-
-    &.message-fake .message-text {
-      color: mix($background-light, red, 30%)
     }
   }
 
@@ -381,6 +378,10 @@ button.scroll-to-bottom {
     height: 30px;
     background-color: $background-light;
   }
+}
+
+.cursor-pointer {
+  cursor: pointer;
 }
 
 

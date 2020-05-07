@@ -1,10 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
-import SteeMessages from './App';
+import DMessages from './App';
 import * as serviceWorker from './serviceWorker';
 
-ReactDOM.render(<SteeMessages />, document.getElementById('root'));
+ReactDOM.render(<DMessages />, document.getElementById('root'));
 
 // If you want your app to work offline and load faster, you can change
 // unregister() to register() below. Note this comes with some pitfalls.

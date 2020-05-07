@@ -330,11 +330,23 @@ body, html, main, div#root, div.App {
     color: lighten($background-darker, 80);
   }
 
+  &.message-fake .message-info {
+    color: mix($background-light, red, 30%)
+  }
+
+  &.message-signed .message-info {
+    color: mix($background-light, limegreen);
+  }
+
   &.sameauthor {
     padding-top: 0;
     padding-bottom: 0;
     .message-info, .message-avatar {
       display: none;
+    }
+
+    &.message-fake .message-text {
+      color: mix($background-light, red, 30%)
     }
   }
 

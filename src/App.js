@@ -32,7 +32,7 @@ class SteeMessages extends React.Component {
 
     if (store.get('authorisedCache')) {
       // Load pre-approved messages and user keys from browser
-      this.authorisedCache = store.get('channels');
+      this.authorisedCache = store.get('authorisedCache');
     } else {
       this.authorisedCache = {"messages": [], "keys": {}};
     }
@@ -170,6 +170,68 @@ class SteeMessages extends React.Component {
 
   signUserOut() {
     this.setState({"currentUser": ""})
+    store.set('user', "");
+  }
+
+  async validateMessage(message) {
+    // get the hash of this message
+    var msg_successful_match = false;
+    var message_hash = crypto.createHash('sha256').update(JSON.stringify(message)).digest('hex');
+    var posting_key = "";
+
+    // Check if we've already verified it
+    if (this.authorisedCache.messages.includes(message_hash)) {
+      // Set matched to true
+      msg_successful_match = true;
+    } else {
+      // If we have their key stored, try that first
+      if(message.from in this.authorisedCache.keys) {
+        // Try and recover the value (catch in case the signature isn't a real signature)
+        try {
+          // If the recovered key equals the key the user has
+          if (this.authorisedCache.keys[message.from] === (Signature.fromString(message.signature).recover(cryptoUtils.sha256(message.signed_data))).toString()) {
+            // Set match to true
+            msg_successful_match = true;
+          }
+        } catch {
+          // Log the failure
+          console.log("Cached user key outdated or invalid message");
+        }
+      }
+
+      // Least cached method - VERY SLOW (relatively)
+      // If not matched
+      if (!msg_successful_match) {
+
+        try {
+          // Get from the blockchain
+          const [account] = await this.hiveClient.database.getAccounts([message.from]);
+
+          var user_public_posting_key = account.posting.key_auths[0][0];
+
+          // Recover public key from message
+          var recovered_public_key = Signature.fromString(message.signature).recover(cryptoUtils.sha256(message.signed_data));
+
+          // Check they match
+          if (user_public_posting_key === recovered_public_key.toString()) {
+            posting_key = pubPostingKey;
+            msg_successful_match = true;
+          }
+        } catch {
+          console.log("Bad Signature!");
+        }
+      }
+
+      // Check if it matches
+      if (msg_successful_match) {
+        current_msg.checked = "signed";
+          // Add hash to hashes list, to save time in future runs
+          this.authorisedCache.messages.push(message_hash);
+          store.set('authorisedCache', this.authorisedCache);
+      } else {
+        current_msg.checked = "fake";
+      }
+    }
   }
 
   async websocketRecieveMessage(data) {
@@ -409,15 +471,17 @@ class Message extends React.Component {
     var sent_at_formatted = sent_at.toLocaleDateString() + " " + sent_at.toLocaleTimeString();
     var verification_symbol = "fas fa-times";
     var verification_description = "This message has no valid proofs attached.";
+    var message_verification_class = " message-fake";
     if ('checked' in this.props.data) {
       if (this.props.data.checked === "signed") {
         verification_symbol="fas fa-check";
-        verification_description = "This message was signed with a valid signature."
+        verification_description = "This message was signed with a valid signature.";
+        message_verification_class = " message-signed";
       }
     }
 
     return (
-      <div className={"message" + ((this.props.previous_author === this.props.data.from) ? " sameauthor": "")}>
+      <div className={"message" + ((this.props.previous_author === this.props.data.from) ? " sameauthor": "") + message_verification_class}>
         <div className="message-avatar" style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.data.from}/avatar")`}}></div>
         <div className="message-info">{this.props.data.from} - <span data-tip={sent_at_formatted} data-place="top"><Since date={sent_at}/></span> <span data-tip={verification_description} data-place="top"><em className={verification_symbol}></em></span></div>
         <div className="message-text">{this.props.data.content}</div>

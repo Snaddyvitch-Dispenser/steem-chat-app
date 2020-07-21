@@ -34,7 +34,7 @@ function updateMessage(message, message_data) {
         message.checked = "signed";
         // Add hash to hashes list, to save time in future runs
         authorisedCache.messages.push(message_hash);
-        authorisedCache.keys[message.from] = posting_key;
+        if (posting_key !== "") {authorisedCache.keys[message.from] = posting_key;}
         store.set('authorisedCache', authorisedCache);
         message.checked = "signed";
         message.checked_message = "This message was signed with a valid key and all fields match.";
@@ -46,9 +46,29 @@ function updateMessage(message, message_data) {
     }
 }
 
+async function verifyByHive(message, message_data) {
+    let [msg_successful_match, msg_failure_reason, posting_key] = message_data;
+    try {
+        // Get from the blockchain
+        const [account] = await hiveClient.database.getAccounts([message.from]);
+
+        posting_key = account.posting.key_auths[0][0] || "";
+
+        // Recover public key from message
+        let recovered_public_key = Signature.fromString(message.signature).recover(cryptoUtils.sha256(message.signed_data));
+
+        // Check they match
+        msg_successful_match = (posting_key === recovered_public_key.toString());
+    } catch {
+        msg_failure_reason = "This message was not signed or was signed with a bad signature!";
+    }
+
+    return [msg_successful_match, msg_failure_reason, posting_key];
+}
+
 async function validateMessage(message) {
     let msg_successful_match = false;
-    let msg_failure_reason, posting_key = "";
+    let msg_failure_reason = "", posting_key = "";
     let message_hash = crypto.createHash('sha256').update(JSON.stringify(message)).digest("hex");
 
     // Check if we've already verified it
@@ -65,20 +85,7 @@ async function validateMessage(message) {
         // Least cached method - VERY SLOW (relatively)
         // If not matched
         if (!msg_successful_match) {
-            try {
-                // Get from the blockchain
-                const [account] = await hiveClient.database.getAccounts([message.from]);
-
-                posting_key = account.posting.key_auths[0][0] || "";
-
-                // Recover public key from message
-                let recovered_public_key = Signature.fromString(message.signature).recover(cryptoUtils.sha256(message.signed_data));
-
-                // Check they match
-                msg_successful_match = (posting_key === recovered_public_key.toString());
-            } catch {
-                msg_failure_reason = "This message was not signed or was signed with a bad signature!";
-            }
+            [msg_successful_match, msg_failure_reason, posting_key] = await verifyByHive(message, [msg_successful_match, msg_failure_reason, posting_key])
         }
 
         [msg_successful_match, msg_failure_reason] = testDataValidity(message, [msg_successful_match, msg_failure_reason]);

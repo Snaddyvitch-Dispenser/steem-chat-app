@@ -1,7 +1,6 @@
 import React from 'react';
 import './App.scss';
 import { ToastContainer, toast } from 'react-toastify';
-import { Client, Signature, cryptoUtils } from 'dsteem';
 import 'react-toastify/dist/ReactToastify.css';
 import Websocket from 'react-websocket';
 import store from 'store/dist/store.modern';
@@ -12,6 +11,7 @@ import ChannelList from "./Components/ChannelList";
 import LoginPanel from "./Components/LoginPanel";
 import Channel from "./Components/Channel";
 import {CUSTOM_JSON_IDENTIFIER} from "./config";
+import validateMessage from "./Libraries/MessageValidator";
 
 // Allow requests to api.dmessages.app to set cookies.
 axios.defaults.withCredentials = true;
@@ -30,25 +30,12 @@ class DMessages extends React.Component {
       this.state.channelList = store.get('channels');
     }
 
-    if (store.get('authorisedCache')) {
-      // Load pre-approved messages and user keys from browser
-      this.authorisedCache = store.get('authorisedCache');
-    } else {
-      this.authorisedCache = {"messages": [], "keys": {}};
-    }
-
     // Load user from storage if saved
-    if (store.get('user')) {
-      if (store.get('user') !== "") {
-        this.state.currentUser = store.get('user');
-      }
-    }
+    this.state.currentUser = store.get('user') || '';
 
     if (store.get('currentChannel')) {
       this.state.currentChannel = store.get('currentChannel');
     }
-
-    this.hiveClient = new Client('https://anyx.io');
 
     this.getFromChain();
   }
@@ -237,94 +224,7 @@ class DMessages extends React.Component {
   }
 
   async validateMessage(message) {
-    // get the hash of this message
-    let msg_successful_match = false;
-    let msg_failure_reason = "";
-    let message_hash = crypto.createHash('sha256').update(JSON.stringify(message)).digest("hex");
-    let posting_key = "";
-
-    // Check if we've already verified it
-    if (this.authorisedCache.messages.includes(message_hash)) {
-      // Set matched to true
-      msg_successful_match = true;
-    } else {
-      // If we have their key stored, try that first
-      if (message.from in this.authorisedCache.keys) {
-        // Try and recover the value (catch in case the signature isn't a real signature)
-        try {
-          // If the recovered key equals the key the user has
-          if (this.authorisedCache.keys[message.from] === (Signature.fromString(message.signature).recover(cryptoUtils.sha256(message.signed_data))).toString()) {
-            // Set match to true
-            msg_successful_match = true;
-          }
-        } catch {
-          // Log the failure
-          console.log("Cached user key outdated or invalid message");
-        }
-      }
-
-    // Least cached method - VERY SLOW (relatively)
-    // If not matched
-    if (!msg_successful_match) {
-      try {
-        // Get from the blockchain
-        const [account] = await this.hiveClient.database.getAccounts([message.from]);
-
-        let user_public_posting_key = account.posting.key_auths[0][0];
-
-        // Recover public key from message
-        let recovered_public_key = Signature.fromString(message.signature).recover(cryptoUtils.sha256(message.signed_data));
-
-        // Check they match
-        if (user_public_posting_key === recovered_public_key.toString()) {
-          posting_key = user_public_posting_key;
-          msg_successful_match = true;
-        }
-      } catch {
-        msg_failure_reason = "This message was not signed or was signed with a bad signature!";
-        console.log("Bad Signature!");
-      }
-    }
-
-    try {
-      // Try to parse the data that was included
-      var parsed_signed_data = JSON.parse(message.signed_data);
-
-      if (parsed_signed_data.to !== message.to) {
-        msg_successful_match = false;
-        msg_failure_reason = "Message to field is not the same as the signed message."
-      }
-
-      if (parsed_signed_data.content !== message.content) {
-        msg_successful_match = false;
-        msg_failure_reason = "Message content doesn't match what was signed.";
-      }
-
-      if (parsed_signed_data.expires < message.timestamp) {
-        msg_successful_match = false;
-        msg_failure_reason = "This signature has expired before the server received it."
-      }
-    } catch {
-      msg_successful_match = false;
-      msg_failure_reason = "This message is missing required fields and has an invalid signature";
-    }
-  }
-
-      // Check if it matches
-      if (msg_successful_match) {
-        message.checked = "signed";
-        // Add hash to hashes list, to save time in future runs
-        this.authorisedCache.messages.push(message_hash);
-        this.authorisedCache.keys[message.from] = posting_key;
-        store.set('authorisedCache', this.authorisedCache);
-        message.checked = "signed";
-        message.checked_message = "This message was signed with a valid key and all fields match.";
-        return message;
-      } else {
-        message.checked = "fake";
-        message.checked_message = msg_failure_reason;
-        return message;
-      }
+    return await validateMessage(message);
   }
 
   handleMessage(history, message) {

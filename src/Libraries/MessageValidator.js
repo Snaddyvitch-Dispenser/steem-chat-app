@@ -82,18 +82,14 @@ async function validateMessage(message) {
         } catch {/* Silent fail, could be an old key */}
 
 
-        // Least cached method - VERY SLOW (relatively)
-        // If not matched
-        if (!msg_successful_match) {
-            [msg_successful_match, msg_failure_reason, posting_key] = await verifyByHive(message, [msg_successful_match, msg_failure_reason, posting_key])
-        }
+        // Go to Hive to check for updated keys
+        (!msg_successful_match) && ([msg_successful_match, msg_failure_reason, posting_key] = await verifyByHive(message, [msg_successful_match, msg_failure_reason, posting_key]));
 
         [msg_successful_match, msg_failure_reason] = testDataValidity(message, [msg_successful_match, msg_failure_reason]);
     }
 
     // Update message
     return updateMessage(message,[msg_successful_match, msg_failure_reason, message_hash, posting_key]);
-
 }
 
 export default validateMessage;

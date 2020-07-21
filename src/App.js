@@ -1,18 +1,16 @@
 import React from 'react';
-import ReactTooltip from 'react-tooltip';
 import './App.scss';
 import { ToastContainer, toast } from 'react-toastify';
 import { Client, Signature, cryptoUtils } from 'dsteem';
-import firefox_logo from './firefox.svg';
-import chrome_logo from './chrome.svg';
 import 'react-toastify/dist/ReactToastify.css';
 import Websocket from 'react-websocket';
-import ScrollToBottom from 'react-scroll-to-bottom';
-import Since from 'react-since';
 import store from 'store/dist/store.modern';
 import axios from "axios";
 import crypto from 'crypto';
 import hive from '@hivechain/hivejs';
+import ChannelList from "./Components/ChannelList";
+import LoginPanel from "./Components/LoginPanel";
+import Channel from "./Components/Channel";
 
 // Allow requests to api.dmessages.app to set cookies.
 axios.defaults.withCredentials = true;
@@ -206,7 +204,7 @@ class DMessages extends React.Component {
                   <h5>Private Message</h5>
                   <p>Send a private message to another user.</p>
                   <div className="input-with-icon">
-                    <div maxLength="100" className="input-icon" id="person-avatar-dm" style={{backgroundImage: `url( "https://steemitimages.com/u/${this.state.pmAddUsername}/avatar")`}}/>
+                    <div className="input-icon" id="person-avatar-dm" style={{backgroundImage: `url( "https://steemitimages.com/u/${this.state.pmAddUsername}/avatar")`}}/>
                     <input type="text" value={this.state.pmAddUsername} id="private_message_username" onChange={event => this.setState({pmAddUsername: event.target.value.toLowerCase()})} maxLength="32" />
                     <button className="input-action" onClick={() => {if(this.state.pmAddUsername !== "" && this.state.pmAddUsername !== "null") {this.addChannel(this.state.pmAddUsername); this.setState({showAddChannels: false, pmAddUsername: ""})}}}>+</button>
                   </div>
@@ -459,6 +457,7 @@ class DMessages extends React.Component {
 
   // Render the entire app
   render() {
+    // noinspection JSUnresolvedLibraryURL
     return (
       <div className="App">
         <ToastContainer />
@@ -473,313 +472,6 @@ class DMessages extends React.Component {
       </div>
     );
   }
-}
-
-class Message extends React.Component {
-    componentDidUpdate() {
-      ReactTooltip.rebuild();
-    }
-
-  render () {
-    let sent_at = (new Date(this.props.data.timestamp * 1000));
-    let sent_at_formatted = sent_at.toLocaleDateString() + " " + sent_at.toLocaleTimeString();
-    let verification_symbol = "fas fa-times";
-    let verification_description = this.props.data.checked_message;
-    let message_verification_class = " message-fake";
-    let message_same_author = "";
-    if ('checked' in this.props.data) {
-      if (this.props.data.checked === "signed" || this.props.data.checked === "signed+chain") {
-        verification_symbol="fas fa-check";
-        if (this.props.data.checked === "signed+chain") {
-          verification_symbol = "fas fa-check-double";
-        }
-        verification_description = this.props.data.checked_message;
-        message_verification_class = " message-signed";
-        if (this.props.previous_message.from === this.props.data.from && this.props.previous_message.checked !== "fake") {
-          // If there's more than 5 minutes between the same user's messages, separate them.
-          if (this.props.previous_message.timestamp + 300 > this.props.data.timestamp) {
-            message_same_author = " same-author";
-          }
-        }
-      }
-    }
-    if (message_same_author.length > 0) {
-      return (
-          <div className={"message" + message_same_author + message_verification_class}>
-            <div className="message-text">{this.props.data.content}</div>
-          </div>
-      );
-    } else {
-      return (
-          <div className={"message" + message_same_author + message_verification_class}>
-            <div className="message-avatar"
-                 style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.data.from}/avatar")`}}/>
-            <div className="message-info">{this.props.data.from} - <span className="cursor-pointer" data-place="top" data-tip={sent_at_formatted}><Since
-                date={sent_at}/></span> <span data-tip={verification_description} className="cursor-pointer" data-place="top"><em
-                className={verification_symbol}/></span></div>
-            <div className="message-text">{this.props.data.content}</div>
-          </div>
-      );
-    }
-  }
-}
-
-class Channel extends React.Component {
-  constructor(props){
-    super(props);
-
-    this.state = {'message': '', "isSending": false}
-  }
-
-  messageGetter() {
-    var look_in = (this.props.currentChannel.isPrivateMessage ? "private" : "group");
-    if (this.props.currentChannel.name in this.props.messageHistory[look_in]) {
-      console.log(this.props.messageHistory[look_in][this.props.currentChannel.name]);
-      return this.props.messageHistory[look_in][this.props.currentChannel.name];
-    } else {
-      return [];
-    }
-  }
-
-  sendMessage() {
-    this.setState({"isSending": true});
-    if (this.state.message.length > 0) {
-      var transaction_data = JSON.stringify({
-        "format": "plaintext",
-        "extensions": [],
-        "app": "dmessages/v0.0.1",
-        "to": this.props.currentChannel.name,
-        "content": this.state.message,
-        "expires": Math.floor((new Date()).getTime()/1000) + 20
-      });
-
-      try {
-        window.hive_keychain.requestSignBuffer(this.props.userSignedIn,transaction_data,"Posting",(keychain_response) => {
-          if (keychain_response.success) {
-            var msg_location = (this.props.currentChannel.isPrivateMessage ? "private" : "channel");
-            var transaction_with_info={
-              "name": this.props.userSignedIn,
-              "signature": keychain_response.result,
-              "type": "send_" + msg_location + "_message",
-              "data": transaction_data
-            };
-            let transaction_string = JSON.stringify(transaction_with_info);
-
-            if (this.props.websocketOpen) {
-              this.props.websocketSend(transaction_string);
-              this.setState({'message': '', 'isSending': false});
-              // We don't have to worry about the next bit, it's only another layer of verification and isn't needed.
-              try {
-                console.log(JSON.stringify(transaction_string));
-                window.hive_keychain.requestCustomJson(this.props.userSignedIn, CUSTOM_JSON_IDENTIFIER, "Posting", JSON.stringify(["approve_message_by_hash",{"hash": crypto.createHash('sha256').update(JSON.stringify(transaction_string)).digest("hex"), "to": this.props.currentChannel.name, "to_type": msg_location}]), "Post message proof hash to chain", (keychain_response) => {
-                  if (!keychain_response.success) {
-                    console.log("Failed to broadcast to chain.");
-                  }
-                });
-              } catch {
-                console.log("Failed to broadcast to chain.");
-              }
-            } else {
-              this.setState({"isSending": false});
-            }
-          } else {
-            toast.error(keychain_response.message + ". Please try again.");
-            this.setState({"isSending": false});
-          }
-        });
-      } catch {
-        toast.error("Can't communicate with Keychain. Please try again.");
-        this.setState({"isSending": false});
-      }
-    }
-  }
-
-  render() {
-    var current_messages = this.messageGetter();
-    return (
-      <div className="channel">
-        <div className="channel-info">
-          <p><em className={"fas fa-" + (this.props.currentChannel.isPrivateMessage ? "at" : "hashtag")}/> {this.props.currentChannel.name}</p>
-        </div>
-        <ScrollToBottom className="channel-content" scrollViewClassName="scrollable-messages" followButtonClassName="scroll-to-bottom fas fa-arrow-down">
-          {current_messages.map((item, index) => (<Message data={item} key={JSON.stringify(item)} previous_message={((index > 0) ? current_messages[index - 1] : "")}/>))}
-        </ScrollToBottom>
-        <div className="channel-send row">
-          <input type="text" onKeyUp={event => {if (event.key === "Enter" || event.key === "NumpadEnter") { this.sendMessage() }}} disabled={!this.props.websocketOpen || this.state.isSending} className="message-text col-sm-11" value={this.state.message} onChange={event => this.setState({message: event.target.value.toString()})} />
-          <div className="channel-buttons col-sm-1">
-            <button disabled={!this.props.websocketOpen || this.state.isSending} onClick={() => this.sendMessage()} className="message-button message-send-button btn"><em className="far fa-paper-plane"/></button>
-            <button className="message-button message-user-button btn" style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.userSignedIn}/avatar")`}}/>
-            <button className="message-button message-add-button btn" onClick={() => this.props.signOut()}><em className="fas fa-sign-out-alt"/></button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-}
-
-class LoginPanel extends React.Component {
-  constructor(props) {
-    super(props);
-
-    // State - for holding values from inputs and other HTML elements
-    this.state = {'loginAs': '', 'keychain': true};
-  }
-  
-  startLoginChallenge(){
-    // If user text not blank
-    if (this.state.loginAs !== "") {      
-      // Get challenge
-      axios.get("https://api.dmessages.app/challenge.php", { params: { user: this.state.loginAs }}).then((response) => {
-        if (response.data.success) {
-          window.hive_keychain.requestVerifyKey(response.data.data.user,response.data.data.challenge, "Memo", (answer) => {
-            if (answer.success) {
-              let requestData = new FormData();
-              requestData.set('user', response.data.data.user);
-              requestData.set('answer', answer.result);
-              axios({
-                method: 'post',
-                url: 'https://api.dmessages.app/challenge_solve.php',
-                data: requestData
-              }).then((response) => {
-                if (response.data.success) {
-                  toast.success("You're signed in!");
-                  this.props.onSignIn(response.data.user);
-                } else {
-                  if (response.data.user === undefined) {
-                    toast.error(response.data.error_message);
-                  } else {
-                    toast.success("You're signed in!");
-                    this.props.onSignIn(response.data.user);
-                    this.props.websocketGetHistory();
-                  }
-                }
-              });
-            } else {
-              toast.error(answer.message);
-            }
-          });
-        } else {
-          if (response.data.user === undefined) {
-            toast.error(response.data.error_message);
-          } else {
-            toast.success("You're signed in!");
-            this.props.onSignIn(response.data.user);
-
-            this.props.websocketGetHistory();
-          }
-        }
-      });
-    } else {
-      toast.error("Please enter a username");
-    }
-  }
-
-  getLoginFormContent() {
-    setTimeout(() => {
-      try {
-        window.hive_keychain.requestHandshake(() => {
-          this.setState({keychain: true});
-        });
-      } catch {
-        this.setState({keychain: false});
-      } // Catch in case Keychain isn't loaded/installed yet
-    }, 500);
-    if ((window.hive_keychain === null || window.hive_keychain === undefined) && this.state.keychain === false) {
-      return (
-        <span className="login-info">
-          <h3>This app requires Hive Keychain</h3>
-          <h4>Install it on:</h4>
-          <div className="browsers">
-            <a rel="nofollow" href="https://addons.mozilla.org/en-US/firefox/addon/hive-keychain">
-              <img src={firefox_logo} alt="Firefox" />
-            </a>
-            <a rel="nofollow" href="https://chrome.google.com/webstore/detail/hive-keychain/jcacnejopjdphbnjgfaaobbfafkihpep">
-              <img src={chrome_logo} alt="Chrome" />
-            </a>
-          </div>
-          <p className="copyright-text">The Firefox logo is a trademark of the Mozilla Foundation in the U.S. and other countries. Google Chrome is a trademark of Google LLC</p>
-        </span>
-      );
-    } else {
-      return (
-        <span className="login-info">
-          <h5>Enter your username to login with Hive Keychain</h5>
-          <div className="form-row">
-            <input className="form-control col-sm-9" onChange={event => this.setState({loginAs: event.target.value.toLowerCase()})}  type="text" id="username" />
-            <div className="col-sm-1"/>
-            <button className="btn btn-primary col-sm-2" onClick={() => this.startLoginChallenge()}>Login!</button>
-          </div>
-        </span>
-      );
-    }
-  }
-
-  render () {
-    if (this.props.signedInAs === "") {
-      return (
-        <div className="overlay">
-          <div className="sm-modal">
-            {this.getLoginFormContent()}
-          </div>
-        </div>
-      );
-    } else {
-      // Get chat history
-      //setTimeout(() => {
-        //WebSocketSignIn(this.props.signedInAs,this.props.websocket);
-      //},500);
-      return "";
-    }
-  }
-}
-
-// List of channels (sidebar) containing <ChannelIcon />s
-class ChannelList extends React.Component {
-  // Update tooltips (for added channels) when the list changes
-  componentDidUpdate() {
-    ReactTooltip.rebuild();
-  }
-
-  // Render the channel list
-  render() {
-    // Work out if separators are needed
-    let first_break = "";
-    if (this.props.channels.private.length > 0) {
-      first_break = <div className="hr"/>;
-    }
-    let second_break = "";
-    if (this.props.channels.group.length > 0) {
-      second_break = <div className="hr"/>;
-    }
-
-    return (
-      <div id="channel-bar">
-        {this.props.channels.private.map((item) => (<ChannelIcon key={item} showRemoveIcon={this.props.showRemoveIcon} removeChannel={()=>this.props.removeChannel(item)} onClick={() => this.props.onChannelClick(item)} user={item}/>))}
-        {first_break}
-        {this.props.channels.group.map((item) => (<ChannelIcon key={item.name} name={item.name} onClick={() => this.props.onChannelClick(item.name, false)} removeChannel={()=>this.props.removeChannel(item.name, false)} showRemoveIcon={this.props.showRemoveIcon} avatar={item.avatar}/>))}
-        {second_break}
-        <div className="command-icon" onClick={this.props.addChannelsDialog} data-tip="Add">+</div>
-        <div className="command-icon" onClick={this.props.removeChannelsDialog} data-tip="Remove">-</div>
-        <ReactTooltip effect="solid" place="right" backgroundColor="#000" />
-      </div>
-    );
-  }
-}
-
-function ChannelIcon(props) {
-  let channel_name = "";
-  let avatar_name = "";
-  if (!props.avatar) {
-    channel_name = props.user;
-    avatar_name = props.user;
-  } else {
-    channel_name = props.name;
-    avatar_name = props.avatar;
-  }
-  return (
-    <div onClick={props.onClick} className={"channel-icon" + (props.showRemoveIcon ? " show-delete" : "")}
-         style={{backgroundImage: `url( "https://images.hive.blog/u/${avatar_name}/avatar")`}} data-tip={channel_name}><div onClick={props.removeChannel} className="delete-channel">&times;</div></div>
-  );
 }
 
 export default DMessages;

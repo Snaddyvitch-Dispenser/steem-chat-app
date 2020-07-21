@@ -11,11 +11,10 @@ import hive from '@hivechain/hivejs';
 import ChannelList from "./Components/ChannelList";
 import LoginPanel from "./Components/LoginPanel";
 import Channel from "./Components/Channel";
+import {CUSTOM_JSON_IDENTIFIER} from "./config";
 
 // Allow requests to api.dmessages.app to set cookies.
 axios.defaults.withCredentials = true;
-
-const CUSTOM_JSON_IDENTIFIER = "dmessages__v1_0_0_0";
 
 // Entire App
 class DMessages extends React.Component {
@@ -328,6 +327,40 @@ class DMessages extends React.Component {
       }
   }
 
+  handleMessage(history, message) {
+    if (message.type === "channel") {
+      if (!(message.to in history.group)) {
+        history["group"][message.to] = [];
+      }
+
+      history["group"][message.to].push(message);
+    } else if (message.type === "private") {
+      let dm_name = ((message.to === this.state.currentUser) ? message.from : message.to);
+      if (!(dm_name in history.private)) {
+        history["private"][dm_name] = [];
+      }
+
+      history["private"][dm_name].push(message);
+    }
+
+    return history;
+  }
+
+  messageDidSend(message_data) {
+    // If it's successful - show success message
+    if (message_data.success) {
+      toast.success("Message sent successfully.");
+    } else {
+      if (message_data.error === "Message expired, you probably took too long to approve this message in Keychain! Please try again.") {
+        toast.error("You took too long to sign that last message. Please sign a new one.");
+        this.onWebsocketConnect();
+      } else {
+        // Otherwise spit out the error.
+        toast.error("Error: " + message_data.error);
+      }
+    }
+  }
+
   async websocketReceiveMessage(data) {
     let message_data = false;
     try {
@@ -342,66 +375,29 @@ class DMessages extends React.Component {
         // Contains history from before we were logged in...
         if (message_data.command === "history") {
           // Create a clear History
-          var history = {"group":{},"private":{}};
-          // Fill History with new history
-          for (var i = 0; i < message_data.data.length; i++) {
-            // Store as a variable for easier access
-            let current_msg = message_data.data[i];
-            current_msg = await this.validateMessage(current_msg);
-            if (current_msg.type === "channel") {
-              if (!(current_msg.to in history.group)) {
-                history["group"][current_msg.to] = [];
-              }
+          let history = {"group":{},"private":{}};
 
-              history["group"][current_msg.to].push(current_msg);
-            } else if (current_msg.type === "private") {
-              var dm_name = ((current_msg.to === this.state.currentUser) ? current_msg.from : current_msg.to);
-              if (!(dm_name in history.private)) {
-                history["private"][dm_name] = [];
-              }
-
-              history["private"][dm_name].push(current_msg);
-            }
+          // Loop through messages
+          for (let i = 0; i < message_data.data.length; i++) {
+            // Add message to history.
+            history = this.handleMessage(history, await this.validateMessage(message_data.data[i]));
           }
-          console.log(history);
+
           // Save history to state - updating all channels
           this.setState({'history': history});
         } else if (message_data.command === "message") {
+            // Get current History
             let history_now = this.state.history;
-            let adding_msg = await this.validateMessage(message_data.data);
 
-            if (adding_msg.type === "channel") {
-              if (!(adding_msg.to in history_now.group)) {
-                history_now["group"][adding_msg.to] = [];
-              }
+            // Process message
+            history_now = this.handleMessage(history_now, await this.validateMessage(message_data.data));
 
-              history_now["group"][adding_msg.to].push(adding_msg);
-            } else if (adding_msg.type === "private") {
-              var pm_name = ((adding_msg.to === this.state.currentUser) ? adding_msg.from : adding_msg.to);
-              if (!(pm_name in history_now.private)) {
-                history_now["private"][pm_name] = [];
-              }
-
-              history_now["private"][pm_name].push(adding_msg);
-            }
-            console.log(history_now);
             // Save history to state - updating all channels
             this.setState({'history': history_now});
         }
         // Response to sending messages
       } else if ('success' in message_data) {
-        // If it's successful - show success message
-        if (message_data.success) {
-          toast.success("Message sent successfully.");
-        } else {
-          if (message_data.error === "Message expired, you probably took too long to approve this message in Keychain! Please try again.") {
-            toast.error("You took too long to sign that last message. Please sign a new one.");
-            this.onWebsocketConnect();
-          } else {
-            // Otherwise spit out the error.
-            toast.error("Error: " + message_data.error);
-          }
-        }
+        this.messageDidSend(message_data);
       }
     }
   }

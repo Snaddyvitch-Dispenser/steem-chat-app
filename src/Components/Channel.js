@@ -3,6 +3,7 @@ import crypto from "crypto";
 import {toast} from "react-toastify";
 import ScrollToBottom from "react-scroll-to-bottom";
 import Message from "./Message";
+import {CUSTOM_JSON_IDENTIFIER} from "../config";
 
 class Channel extends React.Component {
     constructor(props){

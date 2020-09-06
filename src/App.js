@@ -4,17 +4,13 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import Websocket from 'react-websocket';
 import store from 'store/dist/store.modern';
-import axios from "axios";
 import crypto from 'crypto';
-import hive from '@hivechain/hivejs';
+import hive from '@hiveio/hive-js';
 import ChannelList from "./Components/ChannelList";
 import LoginPanel from "./Components/LoginPanel";
 import Channel from "./Components/Channel";
 import {CUSTOM_JSON_IDENTIFIER} from "./config";
 import validateMessage from "./Libraries/MessageValidator";
-
-// Allow requests to api.dmessages.app to set cookies.
-axios.defaults.withCredentials = true;
 
 // Entire App
 class DMessages extends React.Component {
@@ -22,7 +18,7 @@ class DMessages extends React.Component {
     super(props);
 
     // State - for holding values from inputs and other HTML elements
-    this.state = {'pmAddUsername': '', 'showAddChannels': false, 'channelAddName': '', 'showRemoveChannels': false, 'channelList': {"group":[{"name":"general","avatar":"dmessages"}],"private":[]}, 'currentUser': '', "currentChannel": {"name": "general", "isPrivateMessage": false}, "wsConnectionAttempts": 0, "wsIsOpen": false, 'history': {"group":{},"private":{}}};
+    this.state = {'pmAddUsername': '', 'showAddChannels': false, 'channelAddName': '', 'loginUser': '', 'showRemoveChannels': false, 'channelList': {"group":[{"name":"general","avatar":"dmessages"}],"private":[]}, 'currentUser': '', "currentChannel": {"name": "general", "isPrivateMessage": false}, "wsConnectionAttempts": 0, "wsIsOpen": false, 'history': {"group":{},"private":{}}};
 
     // Check if channels are stored in browser
     if (store.get('channels')) {
@@ -211,7 +207,7 @@ class DMessages extends React.Component {
   }
 
   renderLoginPanel() {
-    return (<LoginPanel websocketGetHistory={() => this.onWebsocketConnect()} signedInAs={this.state.currentUser} onSignIn={(user) => {this.userSignedIn(user)}} />);
+    return (<LoginPanel websocketGetHistory={user => this.onWebsocketConnect(user)} signedInAs={this.state.currentUser} onSignIn={(user) => {this.userSignedIn(user)}} />);
   }
 
   renderChannel() {
@@ -274,6 +270,8 @@ class DMessages extends React.Component {
       if ('command' in message_data) {
         // Contains history from before we were logged in...
         if (message_data.command === "history") {
+          if (this.state.loginUser !== '') {this.userSignedIn(this.state.loginUser); this.setState({loginUser: ''})}
+
           // Create a clear History
           let history = {"group":{},"private":{}};
 
@@ -306,17 +304,21 @@ class DMessages extends React.Component {
     this.chatWebSocket.sendMessage(msg);
   }
 
-  onWebsocketConnect() {
-    if (this.state.currentUser !== "") {
-    var signed_challenge = JSON.stringify({
-      "expires": Math.floor((new Date()).getTime() / 1000) + 120,
+  onWebsocketConnect(user) {
+    user = user || this.state.currentUser;
+
+    this.setState({loginUser: user});
+
+    if (user !== "") {
+    let signed_challenge = JSON.stringify({
+      "expires": Math.floor((new Date()).getTime() / 1000) + 120, // expires in 120 seconds (must be sent to server within 2 mins)
       "message": "Please sign me into dMessages",
     });
     try {
-      window.hive_keychain.requestSignBuffer(this.state.currentUser,signed_challenge,"Posting",(keychain_response) => {
+      window.hive_keychain.requestSignBuffer(user,signed_challenge,"Posting",(keychain_response) => {
         if (keychain_response.success) {
-          var challenge_login = JSON.stringify({
-            "name": this.state.currentUser,
+          let challenge_login = JSON.stringify({
+            "name": user,
             "signature": keychain_response.result,
             "type": "login",
             "data": signed_challenge
@@ -326,7 +328,7 @@ class DMessages extends React.Component {
         } else {
           toast.error(keychain_response.message + ". Retrying in 5 seconds.");
           setTimeout(() => {
-            this.onWebsocketConnect();
+            this.onWebsocketConnect(user);
           }, 5000);
         }
       });
@@ -358,13 +360,12 @@ class DMessages extends React.Component {
       <div className="App">
         <ToastContainer />
         <main>
-          <Websocket ref={Websocket => {this.chatWebSocket = Websocket;}} url="wss://chat.websocket.ws:443" onMessage={this.websocketReceiveMessage.bind(this)} onClose={() => {toast.error("Disconnected, retrying."); this.setState({"wsIsOpen": false});}} onOpen={() => {toast.success("Connected!"); this.setState({"wsIsOpen": true}); this.onWebsocketConnect();}} />
+          <Websocket ref={Websocket => {this.chatWebSocket = Websocket;}} url="wss://chat.websocket.ws" onMessage={this.websocketReceiveMessage.bind(this)} onClose={() => {toast.error("Disconnected, retrying."); this.setState({"wsIsOpen": false});}} onOpen={() => {toast.success("Connected!"); this.setState({"wsIsOpen": true}); this.onWebsocketConnect();}} />
           {this.renderLoginPanel()}
           {this.renderAddChannelDialog()}
           {this.renderChannelList()}
           {this.renderChannel()}
         </main>
-        <script src="https://kit.fontawesome.com/e169a3044d.js" crossOrigin="anonymous"/>
       </div>
     );
   }

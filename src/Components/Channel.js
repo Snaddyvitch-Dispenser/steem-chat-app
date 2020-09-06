@@ -4,6 +4,11 @@ import {toast} from "react-toastify";
 import ScrollToBottom from "react-scroll-to-bottom";
 import Message from "./Message";
 import {CUSTOM_JSON_IDENTIFIER} from "../config";
+import {faSignOutAlt, faArrowDown, faPaperPlane, faAt, faHashtag} from '@fortawesome/pro-solid-svg-icons';
+import {library} from '@fortawesome/fontawesome-svg-core';
+import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
+
+library.add(faArrowDown);
 
 class Channel extends React.Component {
     constructor(props){
@@ -80,17 +85,17 @@ class Channel extends React.Component {
         return (
             <div className="channel">
                 <div className="channel-info">
-                    <p><em className={"fas fa-" + (this.props.currentChannel.isPrivateMessage ? "at" : "hashtag")}/> {this.props.currentChannel.name}</p>
+                    <p>{(this.props.currentChannel.isPrivateMessage ? <FontAwesomeIcon icon={faAt} /> : <FontAwesomeIcon icon={faHashtag} />)} {this.props.currentChannel.name}</p>
                 </div>
-                <ScrollToBottom className="channel-content" scrollViewClassName="scrollable-messages" followButtonClassName="scroll-to-bottom fas fa-arrow-down">
+                <ScrollToBottom className="channel-content" scrollViewClassName="scrollable-messages" followButtonClassName="hidden">
                     {current_messages.map((item, index) => (<Message data={item} key={JSON.stringify(item)} previous_message={((index > 0) ? current_messages[index - 1] : "")}/>))}
                 </ScrollToBottom>
                 <div className="channel-send row">
                     <input type="text" onKeyUp={event => {if (event.key === "Enter" || event.key === "NumpadEnter") { this.sendMessage() }}} disabled={!this.props.websocketOpen || this.state.isSending} className="message-text col-sm-11" value={this.state.message} onChange={event => this.setState({message: event.target.value.toString()})} />
                     <div className="channel-buttons col-sm-1">
-                        <button disabled={!this.props.websocketOpen || this.state.isSending} onClick={() => this.sendMessage()} className="message-button message-send-button btn"><em className="far fa-paper-plane"/></button>
+                        <button disabled={!this.props.websocketOpen || this.state.isSending} onClick={() => this.sendMessage()} className="message-button message-send-button btn"><FontAwesomeIcon icon={faPaperPlane} /></button>
                         <button className="message-button message-user-button btn" style={{backgroundImage: `url( "https://images.hive.blog/u/${this.props.userSignedIn}/avatar")`}}/>
-                        <button className="message-button message-add-button btn" onClick={() => this.props.signOut()}><em className="fas fa-sign-out-alt"/></button>
+                        <button className="message-button message-add-button btn" onClick={() => this.props.signOut()}><FontAwesomeIcon icon={faSignOutAlt} /></button>
                     </div>
                 </div>
             </div>

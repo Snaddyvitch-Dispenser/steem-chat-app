@@ -1,9 +1,9 @@
 import crypto from "crypto";
-import {Client, cryptoUtils, Signature} from "dsteem";
+import {Client, cryptoUtils, Signature} from "@hiveio/dhive/lib/index-browser";
 import store from "store/dist/store.modern";
 
 // Hive Blockchain Client for Getting Keys
-let hiveClient = new Client('https://anyx.io');
+let hiveClient = new Client(["https://api.hive.blog", "https://api.hivekings.com", "https://anyx.io", "https://api.openhive.network"]);
 // Get cache or load default
 let authorisedCache = store.get('authorisedCache') || {"messages": [], "keys": {}};
 

@@ -1,5 +1,4 @@
 import React from "react";
-import axios from "axios";
 import {toast} from "react-toastify";
 import firefox_logo from "../firefox.svg";
 import chrome_logo from "../chrome.svg";
@@ -15,47 +14,7 @@ class LoginPanel extends React.Component {
     startLoginChallenge(){
         // If user text not blank
         if (this.state.loginAs !== "") {
-            // Get challenge
-            axios.get("https://api.dmessages.app/challenge.php", { params: { user: this.state.loginAs }}).then((response) => {
-                if (response.data.success) {
-                    window.hive_keychain.requestVerifyKey(response.data.data.user,response.data.data.challenge, "Memo", (answer) => {
-                        if (answer.success) {
-                            let requestData = new FormData();
-                            requestData.set('user', response.data.data.user);
-                            requestData.set('answer', answer.result);
-                            axios({
-                                method: 'post',
-                                url: 'https://api.dmessages.app/challenge_solve.php',
-                                data: requestData
-                            }).then((response) => {
-                                if (response.data.success) {
-                                    toast.success("You're signed in!");
-                                    this.props.onSignIn(response.data.user);
-                                } else {
-                                    if (response.data.user === undefined) {
-                                        toast.error(response.data.error_message);
-                                    } else {
-                                        toast.success("You're signed in!");
-                                        this.props.onSignIn(response.data.user);
-                                        this.props.websocketGetHistory();
-                                    }
-                                }
-                            });
-                        } else {
-                            toast.error(answer.message);
-                        }
-                    });
-                } else {
-                    if (response.data.user === undefined) {
-                        toast.error(response.data.error_message);
-                    } else {
-                        toast.success("You're signed in!");
-                        this.props.onSignIn(response.data.user);
-
-                        this.props.websocketGetHistory();
-                    }
-                }
-            });
+            this.props.websocketGetHistory(this.state.loginAs);
         } else {
             toast.error("Please enter a username");
         }

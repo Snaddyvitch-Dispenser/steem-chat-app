@@ -108,3 +108,5 @@ dist
 
 # Build from React
 build/
+
+.npmrc

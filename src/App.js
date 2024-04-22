@@ -100,28 +100,36 @@ class DMessages extends React.Component {
 
   // Toggle add channels box
   toggleAddChannels() {
-    this.setState({showAddChannels: !this.state.showAddChannels});
+    this.setState((prevState) => {
+      return {showAddChannels: !prevState.showAddChannels};
+    });
   }
   
   // Show remove channels overlay, allowing users to click to delete channels.
   toggleRemoveChannels() {
-    this.setState({showRemoveChannels: !this.state.showRemoveChannels});
+    this.setState((prevState) => {
+      return {showRemoveChannels: !prevState.showRemoveChannels};
+    });
   }
 
   // Add a channel to a user's channel list
   addChannel(name, isPrivateMessage=true, avatar="") {
-    let channels = this.state.channelList;
-    if (isPrivateMessage) {
-      if ((channels.private.indexOf(name) === -1)) {
-        channels.private.push(name);
+    this.setState((prevState) => {
+      let channels = prevState.channelList;
+
+      if (isPrivateMessage) {
+        if ((channels.private.indexOf(name) === -1)) {
+          channels.private.push(name);
+        }
+      } else {
+        if ((channels.group.filter(value=> value["name"] === name).length === 0)) {
+          channels.group.push({"name": name, "avatar": avatar});
+        }
       }
-    } else {
-      if ((channels.group.filter(value=> value["name"] === name).length === 0)) {
-        channels.group.push({"name": name, "avatar": avatar});
-      }
-    }
-    this.setState({channelList: channels});
-    store.set('channels', this.state.channelList);
+
+      store.set('channels', channels);
+      return {channelList: channels};
+    });
   }
 
   // Remove a channel from a user's channel list
@@ -267,7 +275,7 @@ class DMessages extends React.Component {
 
     if (message_data !== false) {
       // commanded message
-      if ('command' in message_data) {
+      if (message_data && (typeof message_data === 'object') && 'command' in message_data) {
         // Contains history from before we were logged in...
         if (message_data.command === "history") {
           if (this.state.loginUser !== '') {this.userSignedIn(this.state.loginUser); this.setState({loginUser: ''})}
@@ -294,7 +302,7 @@ class DMessages extends React.Component {
             this.setState({'history': history_now});
         }
         // Response to sending messages
-      } else if ('success' in message_data) {
+      } else if (message_data && (typeof message_data === 'object') && 'success' in message_data) {
         this.messageDidSend(message_data);
       }
     }
@@ -333,7 +341,9 @@ class DMessages extends React.Component {
         }
       });
     } catch {
-      this.setState({"wsConnectionAttempts": this.state.wsConnectionAttempts + 1});
+      this.setState((prevState) => {
+        return {"wsConnectionAttempts": prevState.wsConnectionAttempts + 1};
+      });
       if (this.state.wsConnectionAttempts > 1) {
         toast.error("Keychain doesn't appear to be available. Retrying in 5 seconds.");
         setTimeout(() => {

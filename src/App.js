@@ -270,7 +270,7 @@ class DMessages extends React.Component {
     try {
       /**
        * Parse the JSON data
-       * @type {{command: string, data: {from: string, to: string, message: string, type: string, timestamp: number}|false}}
+       * @type {{command: string, data: {from: string, to: string, message: string, type: string, timestamp: number}}|false}
        */
       message_data = JSON.parse(data);
     } catch {

@@ -268,6 +268,10 @@ class DMessages extends React.Component {
   async websocketReceiveMessage(data) {
     let message_data = false;
     try {
+      /**
+       * Parse the JSON data
+       * @type {{command: string, data: {from: string, to: string, message: string, type: string, timestamp: number}|false}
+       */
       message_data = JSON.parse(data);
     } catch {
       // In the unlikely event of packet drops .etc. ignore it
@@ -275,7 +279,7 @@ class DMessages extends React.Component {
 
     if (message_data !== false) {
       // commanded message
-      if (message_data && (typeof message_data === 'object') && 'command' in message_data) {
+      if (message_data && typeof message_data === 'object' && message_data !== null && Object.hasOwn(message_data, 'command')) {
         // Contains history from before we were logged in...
         if (message_data.command === "history") {
           if (this.state.loginUser !== '') {this.userSignedIn(this.state.loginUser); this.setState({loginUser: ''})}
@@ -302,7 +306,7 @@ class DMessages extends React.Component {
             this.setState({'history': history_now});
         }
         // Response to sending messages
-      } else if (message_data && (typeof message_data === 'object') && 'success' in message_data) {
+      } else if (message_data && typeof message_data === 'object' && message_data !== null && Object.hasOwn(message_data, 'success')) {
         this.messageDidSend(message_data);
       }
     }
